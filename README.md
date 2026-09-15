@@ -24,10 +24,10 @@ The package is not on Packagist yet, so add the repository to your project's `co
 }
 ```
 
-Then require it as a dev dependency. There are no tagged releases yet, so pin the branch explicitly:
+Then require it as a dev dependency:
 
 ```bash
-composer require --dev luxplus/blade-linter:dev-main
+composer require --dev luxplus/blade-linter
 ```
 
 `no-api` makes Composer clone the repository with git instead of going through the GitHub API, so installs never prompt for a token and are not subject to anonymous API rate limits. Because that disables zip downloads for this package, it must be installed from source, which the `preferred-install` entry above ensures even when you pass `--prefer-dist`.
