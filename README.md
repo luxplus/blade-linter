@@ -78,3 +78,7 @@ vendor/bin/php-cs-fixer fix
 ```
 
 Note: templates are parsed via `stillat/blade-parser` for Blade constructs, with an internal byte-offset HTML tag scanner (the parser's own fragment API is avoided deliberately: it hangs on some real-world templates, and its positions are character-based while all internal arithmetic here is byte-based — see `OffsetConverter`).
+
+## License
+
+This package is open-sourced software licensed under the [MIT license](LICENSE).
