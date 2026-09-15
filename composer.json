@@ -1,6 +1,6 @@
 {
     "name": "luxplus/blade-linter",
-    "description": "Blade template linter with auto-fix — enforces Luxplus blank-line conventions between sibling elements",
+    "description": "Extensible linter for Laravel Blade templates, with auto-fix",
     "type": "library",
     "license": "MIT",
     "require": {

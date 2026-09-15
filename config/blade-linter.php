@@ -7,7 +7,7 @@ return [
         SiblingBlankLines::class,
     ],
     'paths' => [
-        'resources/*/views',
+        'resources/views',
     ],
-    'base' => 'master',
+    'base' => 'main',
 ];

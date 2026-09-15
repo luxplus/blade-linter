@@ -38,7 +38,7 @@ The `blade:lint` artisan command is registered through package auto-discovery.
 
 ```bash
 php artisan blade:lint                          # lint all configured view paths
-php artisan blade:lint resources/webshop/views  # lint specific paths (files or directories)
+php artisan blade:lint resources/views/shop     # lint specific paths (files or directories)
 php artisan blade:lint --fix                    # apply fixes instead of reporting
 php artisan blade:lint --changed                # ratchet mode: only blade files changed vs the base branch
 php artisan blade:lint --changed --base=main    # override the base branch
@@ -59,8 +59,8 @@ return [
         Luxplus\BladeLinter\Rules\SiblingBlankLines::class,
         App\BladeLint\MyProjectRule::class,
     ],
-    'paths' => ['resources/*/views'],
-    'base' => 'master',
+    'paths' => ['resources/views'],
+    'base' => 'main',
 ];
 ```
 
