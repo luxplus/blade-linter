@@ -107,7 +107,7 @@ final class BladeLintCommand extends Command
 
         if ($paths === []) {
             /** @var list<string> $patterns */
-            $patterns = config('blade-linter.paths', ['resources/*/views']);
+            $patterns = config('blade-linter.paths', ['resources/views']);
 
             foreach ($patterns as $pattern) {
                 $viewDirectories = glob($pattern, GLOB_ONLYDIR);
@@ -165,7 +165,7 @@ final class BladeLintCommand extends Command
      */
     private function changedFiles(): ?array
     {
-        $base = $this->option('base') ?? config('blade-linter.base', 'master');
+        $base = $this->option('base') ?? config('blade-linter.base', 'main');
 
         if (!is_string($base) || $base === '') {
             $this->error('The --base option requires a branch name.');
