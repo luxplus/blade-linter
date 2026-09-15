@@ -6,15 +6,31 @@ The core rule (`SiblingBlankLines`): within any scope (an HTML element, an `@if`
 
 ## Installation
 
+The package is not on Packagist yet, so add the repository to your project's `composer.json` first:
+
 ```json
 "repositories": [
-    { "type": "vcs", "url": "git@github.com:luxplus/blade-linter.git" }
-]
+    {
+        "type": "vcs",
+        "url": "https://github.com/luxplus/blade-linter",
+        "no-api": true
+    }
+],
+"config": {
+    "preferred-install": {
+        "luxplus/blade-linter": "source",
+        "*": "dist"
+    }
+}
 ```
 
+Then require it as a dev dependency. There are no tagged releases yet, so pin the branch explicitly:
+
 ```bash
-composer require --dev luxplus/blade-linter
+composer require --dev luxplus/blade-linter:dev-main
 ```
+
+`no-api` makes Composer clone the repository with git instead of going through the GitHub API, so installs never prompt for a token and are not subject to anonymous API rate limits. Because that disables zip downloads for this package, it must be installed from source, which the `preferred-install` entry above ensures even when you pass `--prefer-dist`.
 
 The `blade:lint` artisan command is registered through package auto-discovery.
 
