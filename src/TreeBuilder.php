@@ -43,6 +43,8 @@ final class TreeBuilder
 
     private OffsetConverter $offsets;
 
+    private LineIndex $lineIndex;
+
     /**
      * @param list<string> $lines
      */
@@ -53,8 +55,9 @@ final class TreeBuilder
         $this->events = [];
         $this->opaqueRanges = [];
         $this->offsets = new OffsetConverter($template);
+        $this->lineIndex = new LineIndex($template);
 
-        $tags = (new HtmlTagScanner())->scan($document, $template, $this->offsets);
+        $tags = (new HtmlTagScanner())->scan($document, $template, $this->offsets, $this->lineIndex);
         $this->tagRanges = array_map(
             fn(ScannedTag $tag): array => ['start' => $tag->startOffset, 'end' => $tag->endOffset],
             $tags,
@@ -236,8 +239,8 @@ final class TreeBuilder
                 continue;
             }
 
-            $startLine = $this->line($position->startLine);
-            $endLine = $this->line($position->endLine);
+            $startLine = $this->startLine($position);
+            $endLine = $this->endLine($position);
 
             if ($node instanceof CommentNode) {
                 $this->pushLeafEvent($offset, new LintItem(ItemKind::Comment, $startLine, $endLine, $startLine));
@@ -299,8 +302,8 @@ final class TreeBuilder
             $this->sequence++,
             BuildEventType::ScopeClose,
             scopeId: $scopeId,
-            startLine: $this->line($closePosition->startLine),
-            endLine: $this->line($closePosition->endLine),
+            startLine: $this->startLine($closePosition),
+            endLine: $this->endLine($closePosition),
         );
     }
 
@@ -354,7 +357,7 @@ final class TreeBuilder
             $this->pushLeafEvent($offset, new LintItem(
                 ItemKind::Leaf,
                 $startLine,
-                $this->line($terminatorPosition->endLine),
+                $this->endLine($terminatorPosition),
                 $endLine,
                 opaque: true,
             ));
@@ -380,8 +383,8 @@ final class TreeBuilder
                 $this->sequence++,
                 BuildEventType::ScopeBoundary,
                 scopeId: $scopeId,
-                startLine: $this->line($memberPosition->startLine),
-                endLine: $this->line($memberPosition->endLine),
+                startLine: $this->startLine($memberPosition),
+                endLine: $this->endLine($memberPosition),
             );
         }
 
@@ -390,8 +393,8 @@ final class TreeBuilder
             $this->sequence++,
             BuildEventType::ScopeClose,
             scopeId: $scopeId,
-            startLine: $this->line($terminatorPosition->startLine),
-            endLine: $this->line($terminatorPosition->endLine),
+            startLine: $this->startLine($terminatorPosition),
+            endLine: $this->endLine($terminatorPosition),
         );
     }
 
@@ -400,13 +403,14 @@ final class TreeBuilder
         $this->events[] = new BuildEvent($offset, $this->sequence++, BuildEventType::Leaf, leaf: $item);
     }
 
-    private function line(?int $line): int
+    private function startLine(Position $position): int
     {
-        if ($line === null) {
-            throw new BladeLintException('node without line information');
-        }
+        return $this->lineIndex->lineAt($this->offsets->byteOffset($position->startOffset));
+    }
 
-        return $line;
+    private function endLine(Position $position): int
+    {
+        return $this->lineIndex->lineAt($this->offsets->byteEndOffset($position->endOffset));
     }
 
     private function assemble(int $lineCount): LintItem

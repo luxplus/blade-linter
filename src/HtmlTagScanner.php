@@ -15,10 +15,9 @@ final class HtmlTagScanner
     /**
      * @return list<ScannedTag>
      */
-    public function scan(Document $document, string $template, OffsetConverter $offsets): array
+    public function scan(Document $document, string $template, OffsetConverter $offsets, LineIndex $lines): array
     {
         $masked = $this->maskNonLiteralRanges($document, $template, $offsets);
-        $lineStarts = $this->lineStartOffsets($template);
         $tags = [];
 
         if (preg_match_all(self::COMMENT_PATTERN, $masked, $commentMatches, PREG_OFFSET_CAPTURE) > 0) {
@@ -32,8 +31,8 @@ final class HtmlTagScanner
                     true,
                     $offset,
                     $end,
-                    $this->lineAt($lineStarts, $offset),
-                    $this->lineAt($lineStarts, $end),
+                    $lines->lineAt($offset),
+                    $lines->lineAt($end),
                 );
                 $masked = substr_replace($masked, $this->blankOut($text), $offset, mb_strlen($text, '8bit'));
             }
@@ -50,8 +49,8 @@ final class HtmlTagScanner
                     false,
                     $offset,
                     $end,
-                    $this->lineAt($lineStarts, $offset),
-                    $this->lineAt($lineStarts, $end),
+                    $lines->lineAt($offset),
+                    $lines->lineAt($end),
                 );
             }
         }
@@ -87,42 +86,5 @@ final class HtmlTagScanner
     private function blankOut(string $text): string
     {
         return preg_replace('/[^\n]/', ' ', $text) ?? str_repeat(' ', mb_strlen($text, '8bit'));
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function lineStartOffsets(string $template): array
-    {
-        $starts = [0];
-        $offset = mb_strpos($template, "\n", 0, '8bit');
-
-        while ($offset !== false) {
-            $starts[] = $offset + 1;
-            $offset = mb_strpos($template, "\n", $offset + 1, '8bit');
-        }
-
-        return $starts;
-    }
-
-    /**
-     * @param list<int> $lineStarts
-     */
-    private function lineAt(array $lineStarts, int $offset): int
-    {
-        $low = 0;
-        $high = count($lineStarts) - 1;
-
-        while ($low < $high) {
-            $mid = intdiv($low + $high + 1, 2);
-
-            if (($lineStarts[$mid] ?? 0) <= $offset) {
-                $low = $mid;
-            } else {
-                $high = $mid - 1;
-            }
-        }
-
-        return $low + 1;
     }
 }

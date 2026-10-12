@@ -4,6 +4,7 @@ namespace Luxplus\BladeLinter\Tests;
 
 use Luxplus\BladeLinter\Linter;
 use Override;
+use PHPUnit\Framework\Attributes\TestWith;
 
 final class SiblingBlankLinesTest extends TestCase
 {
@@ -413,6 +414,55 @@ final class SiblingBlankLinesTest extends TestCase
             EOD;
 
         self::assertSame([9], $this->violationLines($template));
+    }
+
+    #[TestWith([4])]
+    #[TestWith([6])]
+    public function testMultibyteTextBeforeDirectivesKeepsLinesAligned(int $ellipses): void
+    {
+        $text = 'Loading data' . str_repeat('…', $ellipses);
+        $template = <<<EOD
+            @section('content')
+                <div>
+                    <p>{$text}</p>
+                </div>
+            @endsection
+
+            @push('scripts')
+                @vite('x.js')
+            @endpush
+            EOD;
+
+        self::assertSame([], $this->violationLines($template));
+        self::assertSame($template, $this->linter->fix($template));
+    }
+
+    public function testMultilineSectionAfterMultibyteTextRequiresBlankLine(): void
+    {
+        $template = <<<'EOD'
+            <p>Loading data…………</p>
+
+            @section('content')
+                <p>{{ $a }}</p>
+            @endsection
+            @section('footer')
+                <p>{{ $b }}</p>
+            @endsection
+            EOD;
+        $expected = <<<'EOD'
+            <p>Loading data…………</p>
+
+            @section('content')
+                <p>{{ $a }}</p>
+            @endsection
+
+            @section('footer')
+                <p>{{ $b }}</p>
+            @endsection
+            EOD;
+
+        self::assertSame([6], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
     }
 
     public function testTextRunsActAsSiblings(): void
