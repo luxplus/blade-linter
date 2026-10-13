@@ -15,6 +15,7 @@ final class BuildFrame
         public readonly int $openStartLine,
         public readonly int $openEndLine,
         public readonly int $scopeId = 0,
+        public readonly ?string $directive = null,
     ) {
         $this->currentRegion = new Region($openEndLine);
     }

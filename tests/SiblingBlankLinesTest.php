@@ -4,6 +4,7 @@ namespace Luxplus\BladeLinter\Tests;
 
 use Luxplus\BladeLinter\Linter;
 use Override;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
 
 final class SiblingBlankLinesTest extends TestCase
@@ -119,7 +120,7 @@ final class SiblingBlankLinesTest extends TestCase
         self::assertSame($expected, $this->linter->fix($template));
     }
 
-    public function testWrappedAttributesCountAsSingleLine(): void
+    public function testWrappedAttributesCountAsMultiline(): void
     {
         $template = <<<'EOD'
             <div>
@@ -128,10 +129,26 @@ final class SiblingBlankLinesTest extends TestCase
                     size="lg"
                 />
                 <span>{{ $a }}</span>
+                <a href="/a"
+                    class="link">{{ $b }}</a>
+            </div>
+            EOD;
+        $expected = <<<'EOD'
+            <div>
+                <x-icon
+                    name="star"
+                    size="lg"
+                />
+
+                <span>{{ $a }}</span>
+
+                <a href="/a"
+                    class="link">{{ $b }}</a>
             </div>
             EOD;
 
-        self::assertSame([], $this->violationLines($template));
+        self::assertSame([6, 7], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
     }
 
     public function testBladeCommentBetweenSiblingsIsIgnored(): void
@@ -334,14 +351,20 @@ final class SiblingBlankLinesTest extends TestCase
         self::assertSame($expected, $this->linter->fix($template));
     }
 
-    public function testRootLevelOneLinersNeedNoBlankLine(): void
+    public function testDifferentRootLevelDirectivesNeedBlankLine(): void
     {
         $template = <<<'EOD'
             @extends('layouts.master')
             @include('layouts.partials.default-scripts')
             EOD;
+        $expected = <<<'EOD'
+            @extends('layouts.master')
 
-        self::assertSame([], $this->violationLines($template));
+            @include('layouts.partials.default-scripts')
+            EOD;
+
+        self::assertSame([2], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
     }
 
     public function testNonRootOneLinersStillNeedNoBlankLine(): void
@@ -484,5 +507,330 @@ final class SiblingBlankLinesTest extends TestCase
             EOD;
 
         self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    private const string BLADESTAN_PROPS_TEMPLATE = <<<'EOD'
+        @php
+            /**
+             * @bladestan-signature
+             * @var App\ViewModels\DiscountTier $tier
+             */
+        @endphp
+
+        @props(['tier'])
+
+        <x-badges.campaign-tag cssClass="discount"
+            :text="text(1572, $tier->getMaxDiscountPercentFormatted())" />
+        EOD;
+
+    private const string HEAD_LAYOUT_TEMPLATE = <<<'EOD'
+        <link rel="preload"
+            href="/fonts/a.woff2"
+            crossorigin="anonymous">
+
+        <link rel="preload"
+            href="/fonts/b.woff2"
+            crossorigin="anonymous">
+
+        @vite('resources/css/swiper.scss')
+        @vite('resources/css/app.scss')
+        @vite('resources/js/app.js')
+
+        <body class="body-app">
+            @yield('content')
+
+            @stack('scripts')
+        </body>
+        EOD;
+
+    /**
+     * @return list<string>
+     */
+    private function violationMessages(string $template): array
+    {
+        return array_map(fn($violation) => $violation->message, $this->linter->lint($template)->violations);
+    }
+
+    public function testPropsFollowedByWrappedComponentIsClean(): void
+    {
+        self::assertSame([], $this->violationLines(self::BLADESTAN_PROPS_TEMPLATE));
+    }
+
+    public function testPropsFollowedByOneLineComponentNeedsBlankLine(): void
+    {
+        $template = <<<'EOD'
+            @php
+                /**
+                 * @bladestan-signature
+                 * @var App\ViewModels\DiscountTier $tier
+                 */
+            @endphp
+
+            @props(['tier'])
+            <x-badges.campaign-tag cssClass="discount" :text="text(1572, $tier->getMaxDiscountPercentFormatted())" />
+            EOD;
+        $expected = <<<'EOD'
+            @php
+                /**
+                 * @bladestan-signature
+                 * @var App\ViewModels\DiscountTier $tier
+                 */
+            @endphp
+
+            @props(['tier'])
+
+            <x-badges.campaign-tag cssClass="discount" :text="text(1572, $tier->getMaxDiscountPercentFormatted())" />
+            EOD;
+
+        self::assertSame([9], $this->violationLines($template));
+        self::assertSame(['Missing blank line around directive `@props`'], $this->violationMessages($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testHeadLayoutIsClean(): void
+    {
+        self::assertSame([], $this->violationLines(self::HEAD_LAYOUT_TEMPLATE));
+    }
+
+    public function testHeadLayoutWithoutBlankLinesIsFixed(): void
+    {
+        $template = self::withoutBlankLines(self::HEAD_LAYOUT_TEMPLATE);
+        self::assertStringNotContainsString("\n\n", $template);
+
+        self::assertSame(self::HEAD_LAYOUT_TEMPLATE, $this->linter->fix($template));
+    }
+
+    public function testHeadLayoutWithExtraBlankLinesIsFixed(): void
+    {
+        $template = <<<'EOD'
+            <link rel="preload"
+                href="/fonts/a.woff2"
+                crossorigin="anonymous">
+
+
+            <link rel="preload"
+                href="/fonts/b.woff2"
+                crossorigin="anonymous">
+
+            @vite('resources/css/swiper.scss')
+
+            @vite('resources/css/app.scss')
+            @vite('resources/js/app.js')
+            <body class="body-app">
+
+                @yield('content')
+                @stack('scripts')
+
+            </body>
+            EOD;
+
+        self::assertSame(self::HEAD_LAYOUT_TEMPLATE, $this->linter->fix($template));
+    }
+
+    public function testBlankLineInsideDirectiveGroupIsReported(): void
+    {
+        $template = <<<'EOD'
+            @vite('resources/css/app.scss')
+
+            @vite('resources/js/app.js')
+            EOD;
+
+        self::assertSame([2], $this->violationLines($template));
+        self::assertSame(['Unexpected blank line inside a group of `@vite` directives'], $this->violationMessages($template));
+    }
+
+    public function testFormDirectivesAreSeparatedFromEachOtherAndInputs(): void
+    {
+        $template = <<<'EOD'
+            <form method="POST" action="/save">
+                @csrf
+                @method('PUT')
+                <input type="text">
+            </form>
+            EOD;
+        $expected = <<<'EOD'
+            <form method="POST" action="/save">
+                @csrf
+
+                @method('PUT')
+
+                <input type="text">
+            </form>
+            EOD;
+
+        self::assertSame([3, 4], $this->violationLines($template));
+        self::assertSame([
+            'Missing blank line between directives `@csrf` and `@method`',
+            'Missing blank line around directive `@method`',
+        ], $this->violationMessages($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testMultilineDirectiveBreaksOutOfItsGroup(): void
+    {
+        $template = <<<'EOD'
+            @vite('resources/css/app.scss')
+            @vite([
+                'resources/js/a.js',
+                'resources/js/b.js',
+            ])
+            @vite('resources/js/app.js')
+            EOD;
+        $expected = <<<'EOD'
+            @vite('resources/css/app.scss')
+
+            @vite([
+                'resources/js/a.js',
+                'resources/js/b.js',
+            ])
+
+            @vite('resources/js/app.js')
+            EOD;
+
+        self::assertSame([2, 6], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testDirectiveNamesMustMatchExactlyToGroup(): void
+    {
+        $template = <<<'EOD'
+            @include('partials.a')
+            @includeWhen($show, 'partials.b')
+            EOD;
+        $expected = <<<'EOD'
+            @include('partials.a')
+
+            @includeWhen($show, 'partials.b')
+            EOD;
+
+        self::assertSame([2], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testOnlyLineLeadingBladeDirectivesCount(): void
+    {
+        $template = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span> @include('partials.a')
+                <button @click="open = true">Open</button>
+                @@notADirective
+                <span>{{ $b }}</span>
+                @{{ $notAnEcho }}
+                <span>{{ $c }}</span>
+            </div>
+            EOD;
+
+        self::assertSame([], $this->violationLines($template));
+    }
+
+    public function testDirectivesInsideOpaqueElementsAreIgnored(): void
+    {
+        $template = <<<'EOD'
+            <script>
+                const a = @json($a);
+                @if ($b)
+                    init();
+                @endif
+            </script>
+            EOD;
+
+        self::assertSame([], $this->violationLines($template));
+        self::assertSame($template, $this->linter->fix($template));
+    }
+
+    public function testDirectivesAtBranchEdgesStayUnpadded(): void
+    {
+        $template = <<<'EOD'
+            @if ($a)
+                @csrf
+            @else
+                @method('PUT')
+                @csrf
+            @endif
+            EOD;
+        $expected = <<<'EOD'
+            @if ($a)
+                @csrf
+            @else
+                @method('PUT')
+
+                @csrf
+            @endif
+            EOD;
+
+        self::assertSame([5], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testCommentTouchingDirectiveIsSkipped(): void
+    {
+        $template = <<<'EOD'
+            <form>
+                @csrf
+                {{-- token above --}}
+                <input type="text">
+            </form>
+            EOD;
+
+        self::assertSame([], $this->violationLines($template));
+    }
+
+    public function testMultibyteContentKeepsDirectiveLinesAligned(): void
+    {
+        $template = <<<'EOD'
+            <div>
+                <p>Størrelse på æske ⋅ Loading…………</p>
+                @csrf
+                <p>æøå</p> @include('partials.a')
+                <span>{{ $a }}</span>
+                @include('partials.b')
+                @include('partials.c')
+            </div>
+            EOD;
+        $expected = <<<'EOD'
+            <div>
+                <p>Størrelse på æske ⋅ Loading…………</p>
+
+                @csrf
+
+                <p>æøå</p> @include('partials.a')
+                <span>{{ $a }}</span>
+
+                @include('partials.b')
+                @include('partials.c')
+            </div>
+            EOD;
+
+        self::assertSame([3, 4, 6], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function directiveTemplates(): iterable
+    {
+        yield 'bladestan props' => [self::BLADESTAN_PROPS_TEMPLATE];
+        yield 'one-line component after props' => ["@props(['tier'])\n<x-badges.campaign-tag cssClass=\"discount\" :text=\"text(1572)\" />\n"];
+        yield 'head layout' => [self::HEAD_LAYOUT_TEMPLATE];
+        yield 'head layout without blanks' => [self::withoutBlankLines(self::HEAD_LAYOUT_TEMPLATE)];
+        yield 'form' => ["<form>\n    @csrf\n    @method('PUT')\n    <input type=\"text\">\n</form>\n"];
+        yield 'multi-line vite' => ["@vite('a')\n@vite([\n    'b',\n])\n@vite('c')\n"];
+        yield 'include and includeWhen' => ["@include('a')\n@includeWhen(\$x, 'b')\n"];
+        yield 'else branches' => ["@if (\$a)\n    @csrf\n\n@else\n    @method('PUT')\n    @csrf\n@endif\n"];
+    }
+
+    #[DataProvider('directiveTemplates')]
+    public function testDirectiveFixIsIdempotent(string $template): void
+    {
+        $fixedOnce = $this->linter->fix($template);
+
+        self::assertSame([], $this->violationLines($fixedOnce));
+        self::assertSame($fixedOnce, $this->linter->fix($fixedOnce));
+    }
+
+    private static function withoutBlankLines(string $template): string
+    {
+        return implode("\n", array_filter(explode("\n", $template), fn(string $line): bool => mb_trim($line) !== ''));
     }
 }

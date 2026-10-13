@@ -37,4 +37,9 @@ final class LineIndex
 
         return $low + 1;
     }
+
+    public function lineStartOffset(int $line): int
+    {
+        return $this->lineStarts[$line - 1] ?? 0;
+    }
 }
