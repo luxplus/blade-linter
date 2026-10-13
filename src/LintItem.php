@@ -14,10 +14,16 @@ final class LintItem
         public readonly int $openEndLine,
         public array $regions = [],
         public readonly bool $opaque = false,
+        public readonly ?string $directive = null,
     ) {}
 
     public function isMultiline(): bool
     {
-        return $this->endLine > $this->openEndLine;
+        return $this->endLine > $this->startLine;
+    }
+
+    public function isDirective(): bool
+    {
+        return $this->directive !== null;
     }
 }

@@ -45,6 +45,7 @@ final class SiblingBlankLines implements LintRule
     {
         $previousEnd = $region->openBoundaryLine;
         $previousMultiline = null;
+        $previousDirective = null;
         $previousComment = false;
 
         $entries = $region->children;
@@ -54,6 +55,7 @@ final class SiblingBlankLines implements LintRule
             $currentStart = $entry->startLine ?? $region->closeBoundaryLine;
             $currentEnd = $entry->endLine ?? $region->closeBoundaryLine;
             $currentMultiline = $entry?->isMultiline();
+            $currentDirective = $entry?->directive;
             $currentComment = $entry !== null && $entry->kind === ItemKind::Comment;
 
             if ($currentStart <= $previousEnd) {
@@ -75,14 +77,12 @@ final class SiblingBlankLines implements LintRule
             $gapIsClean = $blanks === $currentStart - $previousEnd - 1;
 
             if (!$previousComment && !$currentComment && $gapIsClean) {
-                $required = $previousMultiline === null || $currentMultiline === null
-                    ? 0
-                    : (($previousMultiline || $currentMultiline) ? 1 : 0);
+                $required = $this->requiredBlankLines($previousMultiline, $previousDirective, $currentMultiline, $currentDirective);
 
                 if ($blanks !== $required) {
                     $violations[] = new Violation(
                         $blanks < $required ? $currentStart : $previousEnd + 1,
-                        $this->message($previousMultiline, $currentMultiline, $blanks, $required),
+                        $this->message($previousMultiline, $previousDirective, $currentMultiline, $currentDirective, $blanks),
                         $previousEnd,
                         $currentStart,
                         $required,
@@ -92,24 +92,56 @@ final class SiblingBlankLines implements LintRule
 
             $previousEnd = $currentEnd;
             $previousMultiline = $currentMultiline;
+            $previousDirective = $currentDirective;
             $previousComment = $currentComment;
         }
     }
 
-    private function message(?bool $previousMultiline, ?bool $currentMultiline, int $blanks, int $required): string
+    /**
+     * A null multiline flag marks the scope edge. Multi-line siblings always get a blank
+     * line; otherwise directives do, except between single-line directives of the same name.
+     */
+    private function requiredBlankLines(?bool $previousMultiline, ?string $previousDirective, ?bool $currentMultiline, ?string $currentDirective): int
+    {
+        if ($previousMultiline === null || $currentMultiline === null) {
+            return 0;
+        }
+
+        if ($previousMultiline || $currentMultiline) {
+            return 1;
+        }
+
+        if ($previousDirective === null && $currentDirective === null) {
+            return 0;
+        }
+
+        return $previousDirective === $currentDirective ? 0 : 1;
+    }
+
+    private function message(?bool $previousMultiline, ?string $previousDirective, ?bool $currentMultiline, ?string $currentDirective, int $blanks): string
     {
         if ($previousMultiline === null || $currentMultiline === null) {
             return 'Unexpected blank line at block edge';
         }
 
-        if ($required === 1 && $blanks === 0) {
-            return 'Missing blank line between siblings (one spans multiple lines)';
+        if ($previousMultiline || $currentMultiline) {
+            return $blanks === 0
+                ? 'Missing blank line between siblings (one spans multiple lines)'
+                : 'Expected exactly one blank line between siblings';
         }
 
-        if ($required === 1) {
-            return 'Expected exactly one blank line between siblings';
+        if ($previousDirective !== null && $previousDirective === $currentDirective) {
+            return "Unexpected blank line inside a group of `@{$previousDirective}` directives";
         }
 
-        return 'Unexpected blank line between single-line siblings';
+        if ($previousDirective === null && $currentDirective === null) {
+            return 'Unexpected blank line between single-line siblings';
+        }
+
+        $subject = $previousDirective !== null && $currentDirective !== null
+            ? "between directives `@{$previousDirective}` and `@{$currentDirective}`"
+            : 'around directive `@' . ($previousDirective ?? $currentDirective) . '`';
+
+        return $blanks === 0 ? "Missing blank line {$subject}" : "Expected exactly one blank line {$subject}";
     }
 }

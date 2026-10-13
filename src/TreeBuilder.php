@@ -41,6 +41,8 @@ final class TreeBuilder
     /** @var list<array{start: int, end: int}> */
     private array $tagRanges = [];
 
+    private string $template = '';
+
     private OffsetConverter $offsets;
 
     private LineIndex $lineIndex;
@@ -54,6 +56,7 @@ final class TreeBuilder
         $this->nextScopeId = 1;
         $this->events = [];
         $this->opaqueRanges = [];
+        $this->template = $template;
         $this->offsets = new OffsetConverter($template);
         $this->lineIndex = new LineIndex($template);
 
@@ -254,8 +257,21 @@ final class TreeBuilder
                 continue;
             }
 
-            if ($node instanceof PhpBlockNode || $node instanceof VerbatimNode || $node instanceof PhpTagNode) {
+            if ($node instanceof PhpTagNode) {
                 $this->pushLeafEvent($offset, new LintItem(ItemKind::Leaf, $startLine, $endLine, $startLine, opaque: true));
+
+                continue;
+            }
+
+            if ($node instanceof PhpBlockNode || $node instanceof VerbatimNode) {
+                $this->pushLeafEvent($offset, new LintItem(
+                    ItemKind::Leaf,
+                    $startLine,
+                    $endLine,
+                    $startLine,
+                    opaque: true,
+                    directive: $this->lineLeadingDirective($node instanceof PhpBlockNode ? 'php' : 'verbatim', $offset, $startLine),
+                ));
 
                 continue;
             }
@@ -314,6 +330,7 @@ final class TreeBuilder
         }
 
         $name = mb_strtolower($node->content);
+        $directive = $this->lineLeadingDirective($node->content, $offset, $startLine);
 
         if (in_array($name, self::BRANCH_DIRECTIVES, true) && $node->isClosedBy === null) {
             $this->events[] = new BuildEvent(
@@ -322,13 +339,14 @@ final class TreeBuilder
                 BuildEventType::ScopeBoundary,
                 startLine: $startLine,
                 endLine: $endLine,
+                directive: $directive,
             );
 
             return;
         }
 
         if ($node->isClosedBy === null) {
-            $this->pushLeafEvent($offset, new LintItem(ItemKind::Leaf, $startLine, $endLine, $endLine));
+            $this->pushLeafEvent($offset, new LintItem(ItemKind::Leaf, $startLine, $endLine, $endLine, directive: $directive));
 
             return;
         }
@@ -360,6 +378,7 @@ final class TreeBuilder
                 $this->endLine($terminatorPosition),
                 $endLine,
                 opaque: true,
+                directive: $directive,
             ));
 
             return;
@@ -374,6 +393,7 @@ final class TreeBuilder
             scopeId: $scopeId,
             startLine: $startLine,
             endLine: $endLine,
+            directive: $directive,
         );
 
         foreach (array_slice($chain, 1, count($chain) - 2) as $member) {
@@ -396,6 +416,18 @@ final class TreeBuilder
             startLine: $this->startLine($terminatorPosition),
             endLine: $this->endLine($terminatorPosition),
         );
+    }
+
+    /**
+     * A directive only counts as one when it is the first thing on its line, so that
+     * the rule behaves like "a line starting with a directive".
+     */
+    private function lineLeadingDirective(string $name, int $offset, int $startLine): ?string
+    {
+        $lineStart = $this->lineIndex->lineStartOffset($startLine);
+        $indentation = mb_substr($this->template, $lineStart, $offset - $lineStart, '8bit');
+
+        return mb_trim($indentation) === '' ? $name : null;
     }
 
     private function pushLeafEvent(int $offset, LintItem $item): void
@@ -437,7 +469,7 @@ final class TreeBuilder
 
                     break;
                 case BuildEventType::ScopeOpen:
-                    $stack[] = new BuildFrame('scope', '', $event->startLine, $event->endLine, $event->scopeId);
+                    $stack[] = new BuildFrame('scope', '', $event->startLine, $event->endLine, $event->scopeId, $event->directive);
 
                     break;
                 case BuildEventType::ScopeBoundary:
@@ -486,7 +518,13 @@ final class TreeBuilder
         }
 
         $parent = $this->topFrame($stack);
-        $parent->currentRegion->children[] = new LintItem(ItemKind::Leaf, $frame->openStartLine, $frame->openEndLine, $frame->openEndLine);
+        $parent->currentRegion->children[] = new LintItem(
+            ItemKind::Leaf,
+            $frame->openStartLine,
+            $frame->openEndLine,
+            $frame->openEndLine,
+            directive: $frame->directive,
+        );
 
         foreach ($frame->allChildren() as $child) {
             $parent->currentRegion->children[] = $child;
@@ -562,7 +600,13 @@ final class TreeBuilder
         }
 
         if ($targetIndex === null) {
-            $this->topFrame($stack)->currentRegion->children[] = new LintItem(ItemKind::Leaf, $event->startLine, $event->endLine, $event->endLine);
+            $this->topFrame($stack)->currentRegion->children[] = new LintItem(
+                ItemKind::Leaf,
+                $event->startLine,
+                $event->endLine,
+                $event->endLine,
+                directive: $event->directive,
+            );
 
             return;
         }
@@ -623,6 +667,7 @@ final class TreeBuilder
             $event->endLine,
             $frame->openEndLine,
             $frame->regions,
+            directive: $frame->directive,
         );
     }
 
