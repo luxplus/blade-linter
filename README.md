@@ -1,8 +1,43 @@
 # luxplus/blade-linter
 
-Lints Laravel Blade templates for blank-line conventions between sibling elements, with auto-fix.
+Lints Laravel Blade templates for line-break and blank-line conventions, with auto-fix.
 
-The core rule (`SiblingBlankLines`): within any scope (an HTML element, an `@if` branch, a loop body, the file root), two adjacent sibling elements must be separated by exactly one blank line when at least one of them spans multiple lines, and by none when both are single-line. A sibling is multi-line whenever its source spans more than one line, so a tag with wrapped attributes counts as multi-line, whichever tool wrapped it.
+## Rules
+
+### `ElementContentOnOwnLines`
+
+Elements holding structure put their content on lines of its own, one level deeper than their tags. Structure is a block element, a block directive (`@if`, `@foreach`, ...), a component with content, or a single element wrapping all of the content:
+
+```blade
+<tr><th>Name</th><th>Email</th></tr>      {{-- before --}}
+
+<tr>                                      {{-- after --}}
+    <th>Name</th>
+    <th>Email</th>
+</tr>
+```
+
+```blade
+<li><a href="#">Home</a></li>             {{-- before --}}
+
+<li>                                      {{-- after --}}
+    <a href="#">Home</a>
+</li>
+```
+
+Text, echoes, void tags (`<input>`, `<img>`) and inline elements mixed with text are not structure. That content stays on the tag's line until the line gets longer than `max_line_length` (120 by default), and then it moves too. So `<p>{{ $something }}</p>` stays as it is, and a `<p>` holding a long expression gets three lines. Content that already spans several lines while sharing a line with a tag (`<div>Hello` ... `world</div>`) is always moved off the tag lines.
+
+Block elements (`div`, `p`, `li`, `td`, `tr`, `h1`, ...) are also placed on their own lines, so `<tr><td>a</td><td>b</td></tr>` gets one cell per line. Whitespace around and inside block elements doesn't render, so the page looks the same.
+
+Inline elements (`a`, `span`, `strong`, `button`, `label`, ...) are different: whitespace inside them shows up as a space, so `(<span>3</span>)` would turn into `( 3 )`. Their content only moves when they are the sole content of an expanded parent, as in `<li><a href="#">...</a></li>`, where the added whitespace lands at the start and end of a line and is dropped. In `<li>Read <a href="#">the terms</a>.</li>`, the `<a>` always stays on one line.
+
+Elements without content (`<td></td>`) stay on one line, and a comment after a closing tag (`</div> {{-- /.row --}}`) stays where it is. Content whose whitespace is significant is never touched: `<pre>`, `<textarea>`, `<script>`, `<style>` and `<svg>`, elements with an inline `white-space: pre...` style, and elements with one of the configured preformatted classes (by default Tailwind's `whitespace-pre*`). Add your own classes whose CSS sets `white-space: pre-wrap` or similar; the linter can't see stylesheets. Custom tags (such as XML feed elements) are not in either list, so they are left alone.
+
+The element lists, the preformatted classes and the line length are configurable (see below).
+
+### `SiblingBlankLines`
+
+Within any scope (an HTML element, an `@if` branch, a loop body, the file root), two adjacent sibling elements must be separated by exactly one blank line when at least one of them spans multiple lines, and by none when both are single-line. A sibling is multi-line whenever its source spans more than one line, so a tag with wrapped attributes counts as multi-line, whichever tool wrapped it.
 
 Blade directives get a blank line around them too: a sibling whose line starts with a directive (`@csrf`, `@props(...)`, `@vite(...)`, ...) needs exactly one blank line between it and its neighbours, even when both are single-line. The exception is a run of single-line directives with the same name (`@vite`, `@vite`, `@vite`), which forms a group with no blank lines inside and a blank line on either side. Names must match exactly, so `@vite` followed by `@viteReactRefresh` still needs a blank line, and a directive that wraps onto several lines breaks out of its group.
 
@@ -50,7 +85,7 @@ php artisan blade:lint --changed                # ratchet mode: only blade files
 php artisan blade:lint --changed --base=main    # override the base branch
 ```
 
-Check mode exits `1` when violations are found; `--fix` output is idempotent and blade-formatter-compatible.
+Check mode exits `1` when violations are found; `--fix` output is idempotent. If you also use blade-formatter, run `blade:lint --fix`, then blade-formatter, then `blade:lint --fix` once more: moving content onto its own lines shortens lines that blade-formatter had wrapped, and it joins them back up, which can change blank-line spacing. After that round the two tools agree.
 
 ## Configuration
 
@@ -62,6 +97,7 @@ php artisan vendor:publish --tag=blade-linter-config
 // config/blade-linter.php
 return [
     'rules' => [
+        Luxplus\BladeLinter\Rules\ElementContentOnOwnLines::class,
         Luxplus\BladeLinter\Rules\SiblingBlankLines::class,
         App\BladeLint\MyProjectRule::class,
     ],
@@ -74,12 +110,25 @@ return [
             'stack',
         ],
     ],
+    'element_content_on_own_lines' => [
+        // always on their own lines; content moves when it holds structure or the line is too long
+        'block_elements' => Luxplus\BladeLinter\Rules\ElementContentOnOwnLines::DEFAULT_BLOCK_ELEMENTS,
+        // content moves the same way, but only when the element is the sole content of an expanded parent
+        'inline_elements' => Luxplus\BladeLinter\Rules\ElementContentOnOwnLines::DEFAULT_INLINE_ELEMENTS,
+        // classes whose CSS preserves whitespace; these elements and their contents are left alone
+        'preformatted_classes' => [
+            ...Luxplus\BladeLinter\Rules\ElementContentOnOwnLines::DEFAULT_PREFORMATTED_CLASSES,
+            'note-body',
+        ],
+        // text-only content moves onto its own lines once the line would exceed this
+        'max_line_length' => 120,
+    ],
 ];
 ```
 
 ## Custom rules
 
-A rule is any class implementing `Luxplus\BladeLinter\Rules\LintRule`. It receives the parsed template tree (`LintItem` scopes/regions with line spans) plus the raw lines, and returns `Violation`s that carry their own fix (a blank-line gap rewrite). Register it in the `rules` array of the consuming project's config — no package release required.
+A rule is any class implementing `Luxplus\BladeLinter\Rules\LintRule`. It receives the parsed template tree (`LintItem` scopes/regions with line spans) plus the raw lines, and returns `Violation`s that carry their own fix: the lines strictly between `gapAfterLine` and `gapBeforeLine` are replaced by `replacement`, or by `requiredBlankLines` blank lines when no replacement is given. Register it in the `rules` array of the consuming project's config — no package release required.
 
 ## Development
 

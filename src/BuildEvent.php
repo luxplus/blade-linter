@@ -14,5 +14,6 @@ final class BuildEvent
         public readonly int $startLine = 0,
         public readonly int $endLine = 0,
         public readonly ?string $directive = null,
+        public readonly int $endOffset = -1,
     ) {}
 }

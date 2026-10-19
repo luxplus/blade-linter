@@ -59,7 +59,7 @@ final class BladeLintCommandTest extends TestCase
 
     public function testCleanFileSucceeds(): void
     {
-        file_put_contents($this->viewPath, "<div>\n    <span>{{ \$a }}</span>\n</div>\n");
+        file_put_contents($this->viewPath, "<div>\n    <span>{{ \$a }}</span>\n    <span>{{ \$b }}</span>\n</div>\n");
 
         $this->runBladeLint(['paths' => [$this->viewPath]])
             ->expectsOutputToContain('No violations found')
@@ -73,6 +73,27 @@ final class BladeLintCommandTest extends TestCase
 
         $this->runBladeLint(['paths' => [$this->viewPath]])
             ->expectsOutputToContain('Missing blank line around directive `@include`')
+            ->assertExitCode(1);
+    }
+
+    public function testPreformattedClassesComeFromConfig(): void
+    {
+        config(['blade-linter.element_content_on_own_lines.preformatted_classes' => ['english-text']]);
+        file_put_contents($this->viewPath, "<div class=\"english-text\"><p>{{ \$a }}</p></div>\n<div class=\"other\"><p>{{ \$b }}</p></div>\n");
+
+        $this->runBladeLint(['paths' => [$this->viewPath]])
+            ->expectsOutputToContain(':2 Content of `<div>` must be on its own lines')
+            ->doesntExpectOutputToContain(':1 ')
+            ->assertExitCode(1);
+    }
+
+    public function testMaxLineLengthComesFromConfig(): void
+    {
+        config(['blade-linter.element_content_on_own_lines.max_line_length' => 20]);
+        file_put_contents($this->viewPath, "<p>{{ \$something }}</p>\n");
+
+        $this->runBladeLint(['paths' => [$this->viewPath]])
+            ->expectsOutputToContain('Content of `<p>` must be on its own lines (line exceeds 20 characters)')
             ->assertExitCode(1);
     }
 }

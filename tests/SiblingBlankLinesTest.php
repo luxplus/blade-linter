@@ -16,7 +16,7 @@ final class SiblingBlankLinesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->linter = new Linter();
+        $this->linter = new Linter([new SiblingBlankLines()]);
     }
 
     /**

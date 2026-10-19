@@ -9,6 +9,9 @@ final class BuildFrame
 
     public Region $currentRegion;
 
+    /** @var list<int> */
+    public array $boundaryOffsets = [];
+
     public function __construct(
         public readonly string $type,
         public readonly string $tagName,
@@ -16,6 +19,8 @@ final class BuildFrame
         public readonly int $openEndLine,
         public readonly int $scopeId = 0,
         public readonly ?string $directive = null,
+        public readonly int $openStartOffset = -1,
+        public readonly int $openEndOffset = -1,
     ) {
         $this->currentRegion = new Region($openEndLine);
     }
