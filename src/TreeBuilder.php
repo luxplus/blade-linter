@@ -206,6 +206,7 @@ final class TreeBuilder
                     tagName: $tag->tagName,
                     startLine: $tag->startLine,
                     endLine: $tag->endLine,
+                    endOffset: $tag->endOffset,
                 );
 
                 continue;
@@ -224,6 +225,7 @@ final class TreeBuilder
                 tagName: $tag->tagName,
                 startLine: $tag->startLine,
                 endLine: $tag->endLine,
+                endOffset: $tag->endOffset,
             );
         }
     }
@@ -312,6 +314,7 @@ final class TreeBuilder
             scopeId: $scopeId,
             startLine: $startLine,
             endLine: $endLine,
+            endOffset: $this->endOffset($this->position($node)),
         );
         $this->events[] = new BuildEvent(
             $this->offsets->byteOffset($closePosition->startOffset),
@@ -320,6 +323,7 @@ final class TreeBuilder
             scopeId: $scopeId,
             startLine: $this->startLine($closePosition),
             endLine: $this->endLine($closePosition),
+            endOffset: $this->endOffset($closePosition),
         );
     }
 
@@ -340,6 +344,7 @@ final class TreeBuilder
                 startLine: $startLine,
                 endLine: $endLine,
                 directive: $directive,
+                endOffset: $this->endOffset($this->position($node)),
             );
 
             return;
@@ -394,6 +399,7 @@ final class TreeBuilder
             startLine: $startLine,
             endLine: $endLine,
             directive: $directive,
+            endOffset: $this->endOffset($this->position($node)),
         );
 
         foreach (array_slice($chain, 1, count($chain) - 2) as $member) {
@@ -405,6 +411,7 @@ final class TreeBuilder
                 scopeId: $scopeId,
                 startLine: $this->startLine($memberPosition),
                 endLine: $this->endLine($memberPosition),
+                endOffset: $this->endOffset($memberPosition),
             );
         }
 
@@ -415,6 +422,7 @@ final class TreeBuilder
             scopeId: $scopeId,
             startLine: $this->startLine($terminatorPosition),
             endLine: $this->endLine($terminatorPosition),
+            endOffset: $this->endOffset($terminatorPosition),
         );
     }
 
@@ -442,7 +450,12 @@ final class TreeBuilder
 
     private function endLine(Position $position): int
     {
-        return $this->lineIndex->lineAt($this->offsets->byteEndOffset($position->endOffset));
+        return $this->lineIndex->lineAt($this->endOffset($position));
+    }
+
+    private function endOffset(Position $position): int
+    {
+        return $this->offsets->byteEndOffset($position->endOffset);
     }
 
     private function assemble(int $lineCount): LintItem
@@ -461,7 +474,7 @@ final class TreeBuilder
 
                     break;
                 case BuildEventType::TagOpen:
-                    $stack[] = new BuildFrame('html', $event->tagName, $event->startLine, $event->endLine);
+                    $stack[] = new BuildFrame('html', $event->tagName, $event->startLine, $event->endLine, openStartOffset: $event->offset, openEndOffset: $event->endOffset);
 
                     break;
                 case BuildEventType::TagClose:
@@ -469,7 +482,7 @@ final class TreeBuilder
 
                     break;
                 case BuildEventType::ScopeOpen:
-                    $stack[] = new BuildFrame('scope', '', $event->startLine, $event->endLine, $event->scopeId, $event->directive);
+                    $stack[] = new BuildFrame('scope', '', $event->startLine, $event->endLine, $event->scopeId, $event->directive, $event->offset, $event->endOffset);
 
                     break;
                 case BuildEventType::ScopeBoundary:
@@ -575,6 +588,11 @@ final class TreeBuilder
             $event->endLine,
             $frame->openEndLine,
             $frame->regions,
+            tagName: $frame->tagName,
+            startOffset: $frame->openStartOffset,
+            openEndOffset: $frame->openEndOffset,
+            closeStartOffset: $event->offset,
+            endOffset: $event->endOffset,
         );
     }
 
@@ -623,6 +641,7 @@ final class TreeBuilder
 
         $frame->closeRegion($event->startLine);
         $frame->startRegion($event->endLine);
+        $frame->boundaryOffsets[] = $event->offset;
     }
 
     /**
@@ -668,6 +687,11 @@ final class TreeBuilder
             $frame->openEndLine,
             $frame->regions,
             directive: $frame->directive,
+            startOffset: $frame->openStartOffset,
+            openEndOffset: $frame->openEndOffset,
+            closeStartOffset: $event->offset,
+            endOffset: $event->endOffset,
+            boundaryOffsets: $frame->boundaryOffsets,
         );
     }
 

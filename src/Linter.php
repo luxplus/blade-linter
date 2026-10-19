@@ -3,6 +3,7 @@
 namespace Luxplus\BladeLinter;
 
 use Exception;
+use Luxplus\BladeLinter\Rules\ElementContentOnOwnLines;
 use Luxplus\BladeLinter\Rules\LintRule;
 use Luxplus\BladeLinter\Rules\SiblingBlankLines;
 use Stillat\BladeParser\Document\Document;
@@ -17,7 +18,7 @@ final class Linter
      */
     public function __construct(?array $rules = null)
     {
-        $this->rules = $rules ?? [new SiblingBlankLines()];
+        $this->rules = $rules ?? [new ElementContentOnOwnLines(), new SiblingBlankLines()];
     }
 
     public function lint(string $template): LintResult
@@ -52,7 +53,7 @@ final class Linter
 
     public function fix(string $template): string
     {
-        for ($pass = 0; $pass < 5; $pass++) {
+        for ($pass = 0; $pass < 10; $pass++) {
             $result = $this->lint($template);
 
             if ($result->violations === []) {
@@ -72,7 +73,7 @@ final class Linter
     {
         [$lines, $hasTrailingNewline] = $this->splitLines($template);
 
-        usort($violations, fn(Violation $a, Violation $b): int => $b->gapAfterLine <=> $a->gapAfterLine);
+        usort($violations, fn(Violation $a, Violation $b): int => [$b->gapAfterLine, $b->gapBeforeLine] <=> [$a->gapAfterLine, $a->gapBeforeLine]);
 
         foreach ($violations as $violation) {
             $gapLength = min($violation->gapBeforeLine - 1, count($lines)) - $violation->gapAfterLine;
@@ -80,7 +81,7 @@ final class Linter
                 $lines,
                 $violation->gapAfterLine,
                 max($gapLength, 0),
-                array_fill(0, $violation->requiredBlankLines, ''),
+                $violation->replacement ?? array_fill(0, $violation->requiredBlankLines, ''),
             );
         }
 
