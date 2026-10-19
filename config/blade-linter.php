@@ -9,5 +9,8 @@ return [
     'paths' => [
         'resources/views',
     ],
-    'base' => 'main',
+    'base'                => 'main',
+    'sibling_blank_lines' => [
+        'element_directives' => SiblingBlankLines::DEFAULT_ELEMENT_DIRECTIVES,
+    ],
 ];

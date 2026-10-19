@@ -3,6 +3,7 @@
 namespace Luxplus\BladeLinter\Tests;
 
 use Luxplus\BladeLinter\Linter;
+use Luxplus\BladeLinter\Rules\SiblingBlankLines;
 use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -694,17 +695,123 @@ final class SiblingBlankLinesTest extends TestCase
     public function testDirectiveNamesMustMatchExactlyToGroup(): void
     {
         $template = <<<'EOD'
-            @include('partials.a')
-            @includeWhen($show, 'partials.b')
+            @vite('resources/js/app.js')
+            @viteReactRefresh
             EOD;
         $expected = <<<'EOD'
-            @include('partials.a')
+            @vite('resources/js/app.js')
 
-            @includeWhen($show, 'partials.b')
+            @viteReactRefresh
             EOD;
 
         self::assertSame([2], $this->violationLines($template));
         self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testIncludeFamilyIsSpacedLikeElements(): void
+    {
+        $template = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+
+                @include('partials.a')
+
+                @includeIf('partials.b')
+                @includeWhen($show, 'partials.c')
+
+                @includeUnless($hide, 'partials.d')
+                @includeFirst(['partials.e', 'partials.f'])
+                <span>{{ $b }}</span>
+            </div>
+            EOD;
+        $expected = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+                @include('partials.a')
+                @includeIf('partials.b')
+                @includeWhen($show, 'partials.c')
+                @includeUnless($hide, 'partials.d')
+                @includeFirst(['partials.e', 'partials.f'])
+                <span>{{ $b }}</span>
+            </div>
+            EOD;
+
+        self::assertSame([3, 5, 8], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testIncludeNextToOtherDirectiveNeedsBlankLine(): void
+    {
+        $template = <<<'EOD'
+            <form>
+                @csrf
+                @include('partials.fields')
+                @method('PUT')
+            </form>
+            EOD;
+        $expected = <<<'EOD'
+            <form>
+                @csrf
+
+                @include('partials.fields')
+
+                @method('PUT')
+            </form>
+            EOD;
+
+        self::assertSame([3, 4], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testMultilineIncludeNeedsBlankLine(): void
+    {
+        $template = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+                @include('partials.a', [
+                    'b' => $b,
+                ])
+                @include('partials.c')
+            </div>
+            EOD;
+        $expected = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+
+                @include('partials.a', [
+                    'b' => $b,
+                ])
+
+                @include('partials.c')
+            </div>
+            EOD;
+
+        self::assertSame([3, 6], $this->violationLines($template));
+        self::assertSame($expected, $this->linter->fix($template));
+    }
+
+    public function testElementDirectivesAreConfigurable(): void
+    {
+        $template = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+                @include('partials.a')
+                @stack('scripts')
+            </div>
+            EOD;
+        $expected = <<<'EOD'
+            <div>
+                <span>{{ $a }}</span>
+
+                @include('partials.a')
+
+                @stack('scripts')
+            </div>
+            EOD;
+        $linter = new Linter([new SiblingBlankLines(['stack'])]);
+
+        self::assertSame([3, 4], array_map(fn($violation) => $violation->line, $linter->lint($template)->violations));
+        self::assertSame($expected, $linter->fix($template));
     }
 
     public function testOnlyLineLeadingBladeDirectivesCount(): void
@@ -783,8 +890,8 @@ final class SiblingBlankLinesTest extends TestCase
                 @csrf
                 <p>æøå</p> @include('partials.a')
                 <span>{{ $a }}</span>
-                @include('partials.b')
-                @include('partials.c')
+                @stack('partials.b')
+                @stack('partials.c')
             </div>
             EOD;
         $expected = <<<'EOD'
@@ -796,8 +903,8 @@ final class SiblingBlankLinesTest extends TestCase
                 <p>æøå</p> @include('partials.a')
                 <span>{{ $a }}</span>
 
-                @include('partials.b')
-                @include('partials.c')
+                @stack('partials.b')
+                @stack('partials.c')
             </div>
             EOD;
 
@@ -816,7 +923,7 @@ final class SiblingBlankLinesTest extends TestCase
         yield 'head layout without blanks' => [self::withoutBlankLines(self::HEAD_LAYOUT_TEMPLATE)];
         yield 'form' => ["<form>\n    @csrf\n    @method('PUT')\n    <input type=\"text\">\n</form>\n"];
         yield 'multi-line vite' => ["@vite('a')\n@vite([\n    'b',\n])\n@vite('c')\n"];
-        yield 'include and includeWhen' => ["@include('a')\n@includeWhen(\$x, 'b')\n"];
+        yield 'include family' => ["<p>a</p>\n\n@include('a')\n\n@includeWhen(\$x, 'b')\n@csrf\n"];
         yield 'else branches' => ["@if (\$a)\n    @csrf\n\n@else\n    @method('PUT')\n    @csrf\n@endif\n"];
     }
 

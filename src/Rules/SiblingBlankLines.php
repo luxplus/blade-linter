@@ -10,6 +10,15 @@ use Override;
 
 final class SiblingBlankLines implements LintRule
 {
+    public const array DEFAULT_ELEMENT_DIRECTIVES = ['include', 'includeIf', 'includeWhen', 'includeUnless', 'includeFirst', 'includeIsolated'];
+
+    /**
+     * @param list<string> $elementDirectives directives spaced like ordinary elements rather than directives
+     */
+    public function __construct(
+        private readonly array $elementDirectives = self::DEFAULT_ELEMENT_DIRECTIVES,
+    ) {}
+
     #[Override]
     public function check(LintItem $root, array $lines): array
     {
@@ -55,7 +64,7 @@ final class SiblingBlankLines implements LintRule
             $currentStart = $entry->startLine ?? $region->closeBoundaryLine;
             $currentEnd = $entry->endLine ?? $region->closeBoundaryLine;
             $currentMultiline = $entry?->isMultiline();
-            $currentDirective = $entry?->directive;
+            $currentDirective = in_array($entry?->directive, $this->elementDirectives, true) ? null : $entry?->directive;
             $currentComment = $entry !== null && $entry->kind === ItemKind::Comment;
 
             if ($currentStart <= $previousEnd) {

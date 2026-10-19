@@ -4,7 +4,9 @@ Lints Laravel Blade templates for blank-line conventions between sibling element
 
 The core rule (`SiblingBlankLines`): within any scope (an HTML element, an `@if` branch, a loop body, the file root), two adjacent sibling elements must be separated by exactly one blank line when at least one of them spans multiple lines, and by none when both are single-line. A sibling is multi-line whenever its source spans more than one line, so a tag with wrapped attributes counts as multi-line, whichever tool wrapped it.
 
-Blade directives get a blank line around them too: a sibling whose line starts with a directive (`@csrf`, `@props(...)`, `@include(...)`, ...) needs exactly one blank line between it and its neighbours, even when both are single-line. The exception is a run of single-line directives with the same name (`@vite`, `@vite`, `@vite`), which forms a group with no blank lines inside and a blank line on either side. Names must match exactly, so `@include` followed by `@includeWhen` still needs a blank line, and a directive that wraps onto several lines breaks out of its group. Block directives (`@php` ... `@endphp`, `@if` ... `@endif`) are a single multi-line sibling. Escaped `@@`/`@{{`, attributes such as Alpine's `@click`, and directives the parser doesn't know (custom ones registered by the app) are not treated as directives.
+Blade directives get a blank line around them too: a sibling whose line starts with a directive (`@csrf`, `@props(...)`, `@vite(...)`, ...) needs exactly one blank line between it and its neighbours, even when both are single-line. The exception is a run of single-line directives with the same name (`@vite`, `@vite`, `@vite`), which forms a group with no blank lines inside and a blank line on either side. Names must match exactly, so `@vite` followed by `@viteReactRefresh` still needs a blank line, and a directive that wraps onto several lines breaks out of its group.
+
+The `@include` family (`@include`, `@includeIf`, `@includeWhen`, `@includeUnless`, `@includeFirst`, `@includeIsolated`) renders markup in place, so it is spaced like an ordinary element instead: no blank line next to another single-line element or include, but still one next to a multi-line sibling or any other directive. The list is configurable (see below). Block directives (`@php` ... `@endphp`, `@if` ... `@endif`) are a single multi-line sibling. Escaped `@@`/`@{{`, attributes such as Alpine's `@click`, and directives the parser doesn't know (custom ones registered by the app) are not treated as directives.
 
 Scope edges stay unpadded, `@else`/`@elseif`/`@empty` boundaries get no surrounding blanks, pairs touching a Blade/HTML comment (or the doctype) are left alone, and the contents of `@switch`, `<script>`, `<style>`, `<pre>`, `<textarea>` and `<svg>` are not checked.
 
@@ -65,6 +67,13 @@ return [
     ],
     'paths' => ['resources/views'],
     'base' => 'main',
+    'sibling_blank_lines' => [
+        // directives spaced like ordinary elements; replaces the default @include family
+        'element_directives' => [
+            ...Luxplus\BladeLinter\Rules\SiblingBlankLines::DEFAULT_ELEMENT_DIRECTIVES,
+            'stack',
+        ],
+    ],
 ];
 ```
 

@@ -65,4 +65,14 @@ final class BladeLintCommandTest extends TestCase
             ->expectsOutputToContain('No violations found')
             ->assertExitCode(0);
     }
+
+    public function testElementDirectivesComeFromConfig(): void
+    {
+        config(['blade-linter.sibling_blank_lines.element_directives' => []]);
+        file_put_contents($this->viewPath, "<div>\n    <span>{{ \$a }}</span>\n    @include('partials.a')\n</div>\n");
+
+        $this->runBladeLint(['paths' => [$this->viewPath]])
+            ->expectsOutputToContain('Missing blank line around directive `@include`')
+            ->assertExitCode(1);
+    }
 }
