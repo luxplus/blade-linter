@@ -66,9 +66,18 @@ final class BladeLintCommandTest extends TestCase
             ->assertExitCode(0);
     }
 
-    public function testElementDirectivesComeFromConfig(): void
+    public function testIncludeDirectivesAreSpacedLikeElementsByDefault(): void
     {
-        config(['blade-linter.sibling_blank_lines.element_directives' => []]);
+        file_put_contents($this->viewPath, "<div>\n    <span>{{ \$a }}</span>\n    @include('partials.a')\n</div>\n");
+
+        $this->runBladeLint(['paths' => [$this->viewPath]])
+            ->expectsOutputToContain('No violations found')
+            ->assertExitCode(0);
+    }
+
+    public function testIncludeDirectivesAsElementsCanBeTurnedOff(): void
+    {
+        config(['blade-linter.sibling_blank_lines.include_directives_as_elements' => false]);
         file_put_contents($this->viewPath, "<div>\n    <span>{{ \$a }}</span>\n    @include('partials.a')\n</div>\n");
 
         $this->runBladeLint(['paths' => [$this->viewPath]])

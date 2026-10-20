@@ -2,6 +2,7 @@
 
 namespace Luxplus\BladeLinter;
 
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use Luxplus\BladeLinter\Console\BladeLintCommand;
 use Luxplus\BladeLinter\Rules\SiblingBlankLines;
@@ -15,7 +16,9 @@ final class BladeLinterServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/blade-linter.php', 'blade-linter');
         $this->app->when(SiblingBlankLines::class)
             ->needs('$elementDirectives')
-            ->giveConfig('blade-linter.sibling_blank_lines.element_directives', SiblingBlankLines::DEFAULT_ELEMENT_DIRECTIVES);
+            ->give(fn(Application $app): array => $app->make('config')->boolean('blade-linter.sibling_blank_lines.include_directives_as_elements', true)
+                ? SiblingBlankLines::DEFAULT_ELEMENT_DIRECTIVES
+                : []);
     }
 
     public function boot(): void

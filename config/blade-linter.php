@@ -11,6 +11,6 @@ return [
     ],
     'base'                => 'main',
     'sibling_blank_lines' => [
-        'element_directives' => SiblingBlankLines::DEFAULT_ELEMENT_DIRECTIVES,
+        'include_directives_as_elements' => true,
     ],
 ];
